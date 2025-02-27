@@ -1,1 +1,253 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>звонок от Кобякова</title>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      font-family: 'Open Sans', sans-serif;
+      color: white;
+      background: url('7af77554a712fe4330fdf8ea187ef4a3.jpg') no-repeat center center fixed;
+      background-size: cover;
+      overflow: hidden;
+    }
+    #question {
+      position: absolute;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.7);
+      padding: 15px 25px;
+      border-radius: 10px;
+      max-width: 350px;
+      font-size: 24px;
+      text-align: center;
+      opacity: 0;
+      animation: fadeIn 1s ease-out forwards;
+    }
+    #question::after {
+      content: '';
+      position: absolute;
+      bottom: -15px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 15px 15px 0;
+      border-style: solid;
+      border-color: rgba(0, 0, 0, 0.7) transparent transparent transparent;
+    }
+    #yesButton {
+      position: absolute;
+      width: 80px;
+      height: 80px;
+      background-color: #4CAF50;
+      border: none;
+      border-radius: 50%;
+      font-size: 20px;
+      font-family: Arial, sans-serif;
+      color: white;
+      cursor: pointer;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.2s;
+    }
+    #yesButton:hover {
+      background-color: #388E3C;
+    }
+    #canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div id="question">Тебе звонит кобяков. взять трубку?</div>
+  <canvas id="canvas"></canvas>
+  <button id="yesButton">Да</button>
 
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    let pointers = [];
+    const repulsionRadius = 150;
+    let lastInteractionTime = Date.now();
+    const returnDelay = 2500;
+    let isMoving = false;
+    const compressionThreshold = 50;
+
+    let particle = {
+      x: 100,
+      y: canvas.height - 100,
+      originalX: 100,
+      originalY: canvas.height - 100,
+      radius: 40,
+      vx: 0,
+      vy: 0
+    };
+
+    function animate() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      pointers.forEach(pointer => {
+        let dx = pointer.x - particle.x;
+        let dy = pointer.y - particle.y;
+        let distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < repulsionRadius) {
+          let force = (repulsionRadius - distance) / repulsionRadius;
+          let angle = Math.atan2(dy, dx);
+          particle.vx -= Math.cos(angle) * force * 12;
+          particle.vy -= Math.sin(angle) * force * 12;
+          isMoving = true;
+        }
+      });
+
+      if (Date.now() - lastInteractionTime > returnDelay && !isMoving) {
+        let dx = particle.originalX - particle.x;
+        let dy = particle.originalY - particle.y;
+        let distanceToOrigin = Math.sqrt(dx * dx + dy * dy);
+
+        if (distanceToOrigin > 0.1) {
+          let returnFactor = 0.1;
+          particle.x += dx * returnFactor;
+          particle.y += dy * returnFactor;
+          particle.vx *= 0.8;
+          particle.vy *= 0.8;
+        } else {
+          particle.x = particle.originalX;
+          particle.y = particle.originalY;
+          particle.vx = 0;
+          particle.vy = 0;
+        }
+      }
+
+      particle.x += particle.vx;
+      particle.y += particle.vy;
+      particle.vx *= 0.95;
+      particle.vy *= 0.95;
+
+      if (particle.x - particle.radius < 0) {
+        particle.x = particle.radius;
+        particle.vx *= -1;
+      }
+      if (particle.x + particle.radius > canvas.width) {
+        particle.x = canvas.width - particle.radius;
+        particle.vx *= -1;
+      }
+      if (particle.y - particle.radius < 0) {
+        particle.y = particle.radius;
+        particle.vy *= -1;
+      }
+      if (particle.y + particle.radius > canvas.height) {
+        particle.y = canvas.height - particle.radius;
+        particle.vy *= -1;
+      }
+
+      if (pointers.length > 0) {
+        if (particle.x - particle.radius <= 0 || particle.x + particle.radius >= canvas.width) {
+          if (Math.abs(particle.y - pointers[0].y) < compressionThreshold) {
+            let pressDirectionY = Math.sign(pointers[0].y - particle.y);
+            particle.vy += pressDirectionY * 15;
+          }
+        }
+        if (particle.y - particle.radius <= 0 || particle.y + particle.radius >= canvas.height) {
+          if (Math.abs(particle.x - pointers[0].x) < compressionThreshold) {
+            let pressDirectionX = Math.sign(pointers[0].x - particle.x);
+            particle.vx += pressDirectionX * 15;
+          }
+        }
+      }
+
+      ctx.beginPath();
+      ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+      ctx.fillStyle = '#f44336';
+      ctx.fill();
+      ctx.closePath();
+
+      ctx.fillStyle = 'white';
+      ctx.font = '20px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Нет', particle.x, particle.y);
+
+      requestAnimationFrame(animate);
+    }
+
+    window.addEventListener('mousemove', function(e) {
+      if (e.target.closest('#yesButton')) return;
+      pointers = [{ x: e.clientX, y: e.clientY }];
+      lastInteractionTime = Date.now();
+      isMoving = true;
+    });
+
+    window.addEventListener('mouseout', function() {
+      pointers = [];
+    });
+
+    window.addEventListener('touchstart', function(e) {
+      if (e.target.closest('#yesButton')) return;
+      e.preventDefault();
+      pointers = [];
+      for (let i = 0; i < e.touches.length; i++) {
+        pointers.push({ x: e.touches[i].clientX, y: e.touches[i].clientY });
+      }
+      lastInteractionTime = Date.now();
+      isMoving = true;
+    }, { passive: false });
+
+    window.addEventListener('touchmove', function(e) {
+      if (e.target.closest('#yesButton')) return;
+      e.preventDefault();
+      pointers = [];
+      for (let i = 0; i < e.touches.length; i++) {
+        pointers.push({ x: e.touches[i].clientX, y: e.touches[i].clientY });
+      }
+      lastInteractionTime = Date.now();
+      isMoving = true;
+    }, { passive: false });
+
+    window.addEventListener('touchend', function(e) {
+      if (e.target.closest('#yesButton')) return;
+      e.preventDefault();
+      pointers = [];
+      isMoving = false;
+    }, { passive: false });
+
+    window.addEventListener('resize', function() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      particle.originalX = 100;
+      particle.originalY = canvas.height - 100;
+      const yesButton = document.getElementById('yesButton');
+      yesButton.style.left = (canvas.width - 100 - 40) + 'px';
+      yesButton.style.top = (canvas.height - 100 - 40) + 'px';
+    });
+
+    const yesButton = document.getElementById('yesButton');
+    yesButton.style.left = (canvas.width - 100 - 40) + 'px';
+    yesButton.style.top = (canvas.height - 100 - 40) + 'px';
+
+    document.getElementById('yesButton').addEventListener('click', function() {
+      window.location.href = 'game.html';
+    });
+
+    animate();
+  </script>
+</body>
+  </html>
