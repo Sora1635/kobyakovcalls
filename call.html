@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Форма из частиц</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: black;
+    }
+    canvas {
+      display: block;
+    }
+    #nextButton {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #ffffff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      z-index: 10;
+    }
+    #nextButton:hover {
+      background-color: #dddddd;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="heartCanvas"></canvas>
+  <button id="nextButton">Далее</button>
+
+  <script>
+    const canvas = document.getElementById("heartCanvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const pointers = [];
+    const radius = 120;
+
+    // Форма члена
+    function dickShape(t) {
+      const x = 10 * Math.sin(t) * (1 - 0.2 * Math.cos(t)); // Стержень с небольшим утолщением
+      const y = -20 * Math.cos(t) + 5 * Math.cos(t) * Math.sin(t); // Длина с головкой сверху
+      return { x, y };
+    }
+
+    const particles = [];
+    const semenParticles = []; // Частицы для "спермы"
+    const numParticles = 3000;
+    const scale = 10;
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+
+    // Основные частицы формы
+    for (let i = 0; i < numParticles; i++) {
+      const t = Math.random() * Math.PI * 2;
+      const factor = Math.pow(Math.random(), 0.8);
+      const point = dickShape(t);
+      const x = point.x * factor * scale + centerX;
+      const y = point.y * factor * scale + centerY;
+      particles.push({
+        x: x,
+        y: y,
+        originalX: x,
+        originalY: y,
+        size: Math.random() * 2 + 1.5,
+        vx: 0,
+        vy: 0
+      });
+    }
+
+    // Пульсация
+    function heartbeatFunction(t) {
+      const period = 1.35; // 0.35 + 0.25 + 0.75 = 1.35 с
+      const phase = (t % period) / period;
+      if (phase < 0.01) {
+        return 1 + 0.2 * (phase / 0.01); // Резкий скачок до 1.2
+      } else if (phase < 0.2593) { // Остаток до 0.35 с в большом состоянии
+        return 1.2;
+      } else if (phase < 0.2693) { // Уменьшение за 0.01 с (0.35–0.36)
+        return 1 + 0.2 * (1 - (phase - 0.2593) / 0.01); // Резкий спад до 1
+      } else if (phase < 0.4444) { // Остаток до 0.6 с в маленьком состоянии
+        return 1;
+      } else {
+        return 1; // Пауза 0.75 с
+      }
+    }
+
+    // Свечение
+    function blinkFunction(t) {
+      const period = 1.35;
+      const phase = (t % period) / period;
+      if (phase < 0.2593) { // Большое состояние (0.0–0.35 с)
+        return 0.4; // Затухание
+      } else {
+        return 1; // Сияние в маленьком состоянии (0.35–1.35 с)
+      }
+    }
+
+    // Создание частиц "спермы" при уменьшении
+    function spawnSemenParticles() {
+      for (let i = 0; i < 20; i++) { // 20 частиц за "выстрел"
+        const t = Math.random() * Math.PI - Math.PI / 2; // Угол вверх (±90°)
+        const speed = 5 + Math.random() * 5; // Скорость 5–10
+        const x = centerX; // Начало из центра верхней части
+        const y = centerY - 150; // Верх формы (примерно)
+        semenParticles.push({
+          x: x,
+          y: y,
+          vx: Math.cos(t) * speed,
+          vy: Math.sin(t) * speed,
+          size: Math.random() * 2 + 1,
+          lifetime: 1 // Время жизни 1 с
+        });
+      }
+    }
+
+    function animate() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const time = performance.now() / 1000;
+      const pulsate = heartbeatFunction(time);
+      const blink = blinkFunction(time);
+      const phase = (time % 1.35) / 1.35;
+
+      // Запускаем "выстрел" при переходе от большого к маленькому
+      if (phase >= 0.2593 && phase < 0.2693 && semenParticles.length === 0) {
+        spawnSemenParticles();
+      }
+
+      particles.forEach(p => {
+        p.x += Math.sin(time * 5 + p.originalX) * 0.4;
+        p.y += Math.cos(time * 5 + p.originalY) * 0.4;
+
+        const targetX = centerX + (p.originalX - centerX) * pulsate;
+        const targetY = centerY + (p.originalY - centerY) * pulsate;
+        const baseReturnSpeed = pointers.length === 0 ? 0.03 : 0.01;
+        const dx = targetX - p.x;
+        const dy = targetY - p.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const acceleration = Math.min(distance * 0.001, 0.05);
+        const returnSpeed = baseReturnSpeed + acceleration;
+        p.x += dx * returnSpeed;
+        p.y += dy * returnSpeed;
+
+        pointers.forEach(pointer => {
+          const dx = pointer.x - p.x;
+          const dy = pointer.y - p.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          if (distance < radius) {
+            const force = (radius - distance) / radius;
+            const angle = Math.atan2(dy, dx);
+            p.vx -= Math.cos(angle) * force * 2;
+            p.vy -= Math.sin(angle) * force * 2;
+          }
+        });
+
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.9;
+        p.vy *= 0.9;
+
+        const brightness = Math.round(blink * 255);
+        ctx.fillStyle = `rgb(${brightness}, 0, 0)`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Обработка частиц "спермы"
+      semenParticles.forEach((sp, index) => {
+        sp.x += sp.vx;
+        sp.y += sp.vy;
+        sp.vy += 0.2; // Гравитация
+        sp.lifetime -= 0.02; // Уменьшение времени жизни
+
+        ctx.fillStyle = `rgba(255, 255, 255, ${sp.lifetime})`; // Белый цвет с затуханием
+        ctx.beginPath();
+        ctx.arc(sp.x, sp.y, sp.size, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (sp.lifetime <= 0) {
+          semenParticles.splice(index, 1); // Удаление отработанных частиц
+        }
+      });
+
+      requestAnimationFrame(animate);
+    }
+
+    window.addEventListener("mousemove", e => {
+      if (e.target.closest("#nextButton")) return;
+      const mousePointer = pointers.find(p => p.id === "mouse");
+      if (mousePointer) {
+        mousePointer.x = e.clientX;
+        mousePointer.y = e.clientY;
+      } else {
+        pointers.push({ id: "mouse", x: e.clientX, y: e.clientY });
+      }
+    });
+
+    window.addEventListener("mouseout", () => {
+      const index = pointers.findIndex(p => p.id === "mouse");
+      if (index !== -1) pointers.splice(index, 1);
+    });
+
+    window.addEventListener("touchstart", e => {
+      if (e.target.closest("#nextButton")) return;
+      e.preventDefault();
+      pointers.length = 0;
+      for (let i = 0; i < e.touches.length; i++) {
+        pointers.push({
+          id: e.touches[i].identifier,
+          x: e.touches[i].clientX,
+          y: e.touches[i].clientY
+        });
+      }
+    }, { passive: false });
+
+    window.addEventListener("touchmove", e => {
+      if (e.target.closest("#nextButton")) return;
+      e.preventDefault();
+      pointers.length = 0;
+      for (let i = 0; i < e.touches.length; i++) {
+        pointers.push({
+          id: e.touches[i].identifier,
+          x: e.touches[i].clientX,
+          y: e.touches[i].clientY
+        });
+      }
+    }, { passive: false });
+
+    window.addEventListener("touchend", e => {
+      if (e.target.closest("#nextButton")) return;
+      e.preventDefault();
+      pointers.length = 0;
+      for (let i = 0; i < e.touches.length; i++) {
+        pointers.push({
+          id: e.touches[i].identifier,
+          x: e.touches[i].clientX,
+          y: e.touches[i].clientY
+        });
+      }
+    }, { passive: false });
+
+    window.addEventListener("touchcancel", e => {
+      if (e.target.closest("#nextButton")) return;
+      e.preventDefault();
+      pointers.length = 0;
+    }, { passive: false });
+
+    window.addEventListener("resize", () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    });
+
+    const nextButton = document.getElementById("nextButton");
+    nextButton.addEventListener("mousedown", e => e.stopPropagation(), true);
+    nextButton.addEventListener("touchstart", e => e.stopPropagation(), true);
+    nextButton.addEventListener("click", e => {
+      e.stopPropagation();
+      window.location.href = "next.html";
+    });
+
+    animate();
+  </script>
+</body>
+</html>
